@@ -1,6 +1,5 @@
 #!/bin/sh -l
 set -e
-echo "::debug::\$cmd: $1"
 RESULT=$(eval "$1")
 RESULT="${RESULT//'%'/'%25'}"
 RESULT="${RESULT//$'\n'/'%0A'}"
