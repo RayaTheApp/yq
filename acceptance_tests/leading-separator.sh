@@ -1,5 +1,8 @@
 #!/bin/bash
 
+
+# examples where header-preprocess is required
+
 setUp() {
   rm test*.yml || true
   cat >test.yml <<EOL
@@ -8,7 +11,7 @@ a: test
 EOL
 }
 
-testLeadingSeperatorWithDoc() {
+testLeadingSeparatorWithDoc() {
   cat >test.yml <<EOL
 # hi peeps
 # cool
@@ -31,18 +34,94 @@ EOM
   assertEquals "$expected" "$X"
 }
 
-testLeadingSeperatorPipeIntoEvalSeq() {
+
+testLeadingSeparatorWithNewlinesNewDoc() {
+  cat >test.yml <<EOL
+# hi peeps
+# cool
+
+
+---
+a: test
+---
+b: cool
+EOL
+
+  read -r -d '' expected << EOM
+# hi peeps
+# cool
+
+
+---
+a: thing
+---
+b: cool
+EOM
+
+  X=$(./yq e '(select(di == 0) | .a) = "thing"' - < test.yml)
+  assertEquals "$expected" "$X"
+}
+
+testLeadingSeparatorWithNewlinesMoreComments() {
+  cat >test.yml <<EOL
+# hi peeps
+# cool
+
+---
+# great
+
+a: test
+---
+b: cool
+EOL
+
+  read -r -d '' expected << EOM
+# hi peeps
+# cool
+
+---
+# great
+
+a: thing
+---
+b: cool
+EOM
+
+  X=$(./yq e '(select(di == 0) | .a) = "thing"' - < test.yml)
+  assertEquals "$expected" "$X"
+}
+
+
+testLeadingSeparatorWithDirective() {
+  cat >test.yml <<EOL
+%YAML 1.1
+---
+this: should really work
+EOL
+
+  read -r -d '' expected << EOM
+%YAML 1.1
+---
+this: should really work
+EOM
+
+  X=$(./yq < test.yml)
+  assertEquals "$expected" "$X"
+}
+
+
+testLeadingSeparatorPipeIntoEvalSeq() {
   X=$(./yq e - < test.yml)
   expected=$(cat test.yml)
   assertEquals "$expected" "$X"
 }
 
-testLeadingSeperatorExtractField() {
+testLeadingSeparatorExtractField() {
   X=$(./yq e '.a' - < test.yml)
   assertEquals "test" "$X"
 }
 
-testLeadingSeperatorExtractFieldWithCommentsAfterSep() {
+testLeadingSeparatorExtractFieldWithCommentsAfterSep() {
   cat >test.yml <<EOL
 ---
 # hi peeps
@@ -53,7 +132,7 @@ EOL
   assertEquals "test" "$X"
 }
 
-testLeadingSeperatorExtractFieldWithCommentsBeforeSep() {
+testLeadingSeparatorExtractFieldWithCommentsBeforeSep() {
   cat >test.yml <<EOL
 # hi peeps
 # cool
@@ -65,7 +144,7 @@ EOL
 }
 
 
-testLeadingSeperatorExtractFieldMultiDoc() {
+testLeadingSeparatorExtractFieldMultiDoc() {
   cat >test.yml <<EOL
 ---
 a: test
@@ -82,13 +161,13 @@ EOM
   assertEquals "$expected" "$X"
 }
 
-testLeadingSeperatorExtractFieldMultiDocWithComments() {
+testLeadingSeparatorExtractFieldMultiDocWithComments() {
   cat >test.yml <<EOL
 # here
 ---
 # there
 a: test
-# whereever
+# wherever
 ---
 # you are
 a: test2
@@ -105,26 +184,26 @@ EOM
 }
 
 
-testLeadingSeperatorEvalSeq() {
+testLeadingSeparatorEvalSeq() {
   X=$(./yq e test.yml)
   expected=$(cat test.yml)
   assertEquals "$expected" "$X"
 }
 
-testLeadingSeperatorPipeIntoEvalAll() {
+testLeadingSeparatorPipeIntoEvalAll() {
   X=$(./yq ea - < test.yml)
   expected=$(cat test.yml)
   assertEquals "$expected" "$X"
 }
 
 
-testLeadingSeperatorEvalAll() {
+testLeadingSeparatorEvalAll() {
   X=$(./yq ea test.yml)
   expected=$(cat test.yml)
   assertEquals "$expected" "$X"
 }
 
-testLeadingSeperatorMultiDocEvalSimple() {
+testLeadingSeparatorMultiDocEvalSimple() {
   read -r -d '' expected << EOM
 ---
 a: test
@@ -138,7 +217,7 @@ EOM
   assertEquals "$expected" "$X"
 }
 
-testLeadingSeperatorMultiDocInOneFile() {
+testLeadingSeparatorMultiDocInOneFile() {
   cat >test.yml <<EOL
 ---
 # hi peeps
@@ -152,7 +231,7 @@ EOL
   assertEquals "$expected" "$X"
 }
 
-testLeadingSeperatorMultiDocInOneFileEvalAll() {
+testLeadingSeparatorMultiDocInOneFileEvalAll() {
   cat >test.yml <<EOL
 ---
 # hi peeps
@@ -166,7 +245,7 @@ EOL
   assertEquals "$expected" "$X"
 }
 
-testLeadingSeperatorMultiDocEvalComments() {
+testLeadingSeparatorMultiDocEvalComments() {
   cat >test.yml <<EOL
 # hi peeps
 # cool
@@ -194,7 +273,7 @@ EOM
   assertEquals "$expected" "$X"
 }
 
-testLeadingSeperatorMultiDocEvalCommentsTrailingSep() {
+testLeadingSeparatorMultiDocEvalCommentsTrailingSep() {
   cat >test.yml <<EOL
 # hi peeps
 # cool
@@ -226,7 +305,7 @@ EOM
   assertEquals "$expected" "$X"
 }
 
-testLeadingSeperatorMultiMultiDocEvalCommentsTrailingSep() {
+testLeadingSeparatorMultiMultiDocEvalCommentsTrailingSep() {
   cat >test.yml <<EOL
 # hi peeps
 # cool
@@ -266,7 +345,7 @@ EOM
   assertEquals "$expected" "$X"
 }
 
-testLeadingSeperatorMultiDocEvalCommentsLeadingSep() {
+testLeadingSeparatorMultiDocEvalCommentsLeadingSep() {
   cat >test.yml <<EOL
 ---
 # hi peeps
@@ -326,7 +405,7 @@ EOM
   assertEquals "$expected" "$X"
 }
 
-testLeadingSeperatorMultiDocEvalCommentsStripComments() {
+testLeadingSeparatorMultiDocEvalCommentsStripComments() {
   cat >test.yml <<EOL
 ---
 # hi peeps
@@ -349,7 +428,7 @@ EOM
   assertEquals "$expected" "$X"
 }
 
-testLeadingSeperatorMultiDocEvalCommentsLeadingSepNoDocFlag() {
+testLeadingSeparatorMultiDocEvalCommentsLeadingSepNoDocFlag() {
   cat >test.yml <<EOL
 ---
 # hi peeps
@@ -375,7 +454,7 @@ EOM
   assertEquals "$expected" "$X"
 }
 
-testLeadingSeperatorMultiDocEvalJsonFlag() {
+testLeadingSeparatorMultiDocEvalJsonFlag() {
   cat >test.yml <<EOL
 ---
 # hi peeps
@@ -404,7 +483,7 @@ EOM
   assertEquals "$expected" "$X"
 }
 
-testLeadingSeperatorMultiDocEvalAllJsonFlag() {
+testLeadingSeparatorMultiDocEvalAllJsonFlag() {
   cat >test.yml <<EOL
 ---
 # hi peeps
@@ -433,7 +512,7 @@ EOM
   assertEquals "$expected" "$X"
 }
 
-testLeadingSeperatorMultiDocEvalAll() {
+testLeadingSeparatorMultiDocEvalAll() {
   read -r -d '' expected << EOM
 ---
 a: test

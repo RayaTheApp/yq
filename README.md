@@ -7,27 +7,6 @@ a lightweight and portable command-line YAML, JSON and XML processor. `yq` uses 
 
 yq is written in go - so you can download a dependency free binary for your platform and you are good to go! If you prefer there are a variety of package managers that can be used as well as Docker and Podman, all listed below.
 
-## Notice for v4.x versions prior to 4.18.1
-Since 4.18.1, yq's 'eval/e' command is the _default_ command and no longer needs to be specified.
-
-Older versions will still need to specify 'eval/e'.
-
-Similarly, '-' is no longer required as a filename to read from STDIN (unless reading from one or more files).
-
-TLDR:
-
-Prior to 4.18.1 
-```bash
-yq e '.cool' - < file.yaml
-```
-
-4.18+ 
-```bash
-yq '.cool' < file.yaml
-```
-
-When merging multiple files together, `eval-all/ea` is still required to tell `yq` to run the expression against all the document at once.
-
 ## Quick Usage Guide
 
 Read a value:
@@ -40,7 +19,7 @@ Pipe from STDIN:
 yq '.a.b[0].c' < file.yaml
 ```
 
-Update a yaml file, inplace
+Update a yaml file, in place
 ```bash
 yq -i '.a.b[0].c = "cool"' file.yaml
 ```
@@ -52,6 +31,10 @@ NAME=mike yq -i '.a.b[0].c = strenv(NAME)' file.yaml
 
 Merge multiple files
 ```bash
+# merge two files
+yq -n 'load("file1.yaml") * load("file2.yaml")'
+
+# merge using globs:
 # note the use of `ea` to evaluate all the files at once
 # instead of in sequence
 yq ea '. as $item ireduce ({}; . * $item )' path/to/*.yml
@@ -66,12 +49,17 @@ yq -i '
 ' file.yaml
 ```
 
-Convert JSON to YAML
+Find and update an item in an array:
 ```bash
-yq -P sample.json
+yq '(.[] | select(.name == "foo") | .address) = "12 cat st"'
 ```
 
-See the [documentation](https://mikefarah.gitbook.io/yq/) for more examples.
+Convert JSON to YAML
+```bash
+yq -Poy sample.json
+```
+
+See [recipes](https://mikefarah.gitbook.io/yq/recipes) for more examples and the [documentation](https://mikefarah.gitbook.io/yq/) for more information.
 
 Take a look at the discussions for [common questions](https://github.com/mikefarah/yq/discussions/categories/q-a), and [cool ideas](https://github.com/mikefarah/yq/discussions/categories/show-and-tell)
 
@@ -80,7 +68,10 @@ Take a look at the discussions for [common questions](https://github.com/mikefar
 ### [Download the latest binary](https://github.com/mikefarah/yq/releases/latest)
 
 ### wget
-Use wget to download the pre-compiled binaries:
+Use wget to download, gzipped pre-compiled binaries:
+
+
+For instance, VERSION=v4.2.0 and BINARY=yq_linux_amd64
 
 #### Compressed via tar.gz
 ```bash
@@ -95,7 +86,12 @@ wget https://github.com/mikefarah/yq/releases/download/${VERSION}/${BINARY} -O /
     chmod +x /usr/bin/yq
 ```
 
-For instance, VERSION=v4.2.0 and BINARY=yq_linux_amd64
+#### Latest version
+
+```bash
+wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq &&\
+    chmod +x /usr/bin/yq
+```
 
 ### MacOS / Linux via Homebrew:
 Using [Homebrew](https://brew.sh/)
@@ -242,7 +238,19 @@ go install github.com/mikefarah/yq/v4@latest
 ## Community Supported Installation methods
 As these are supported by the community :heart: - however, they may be out of date with the officially supported releases.
 
-# Webi
+_Please note that the Debian package (previously supported by @rmescandon) is no longer maintained. Please use an alternative installation method._
+
+
+### Nix
+
+```
+nix profile install nixpkgs#yq-go
+```
+
+See [here](https://search.nixos.org/packages?channel=unstable&show=yq-go&from=0&size=50&sort=relevance&type=packages&query=yq-go)
+
+
+### Webi
 
 ```
 webi yq
@@ -258,12 +266,25 @@ pacman -S go-yq
 ```
 
 ### Windows:
+
+Using [Chocolatey](https://chocolatey.org)
+
 [![Chocolatey](https://img.shields.io/chocolatey/v/yq.svg)](https://chocolatey.org/packages/yq)
 [![Chocolatey](https://img.shields.io/chocolatey/dt/yq.svg)](https://chocolatey.org/packages/yq)
 ```
 choco install yq
 ```
 Supported by @chillum (https://chocolatey.org/packages/yq)
+
+Using [scoop](https://scoop.sh/)
+```
+scoop install main/yq
+```
+
+Using [winget](https://learn.microsoft.com/en-us/windows/package-manager/)
+```
+winget install --id MikeFarah.yq
+```
 
 ### Mac:
 Using [MacPorts](https://www.macports.org/)
@@ -282,15 +303,6 @@ Supported by Tuan Hoang
 https://pkgs.alpinelinux.org/package/edge/community/x86/yq
 
 
-### On Ubuntu 16.04 or higher from Debian package:
-```sh
-sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys CC86BB64
-sudo add-apt-repository ppa:rmescandon/yq
-sudo apt update
-sudo apt install yq -y
-```
-Supported by @rmescandon (https://launchpad.net/~rmescandon/+archive/ubuntu/yq)
-
 ## Features
 - [Detailed documentation with many examples](https://mikefarah.gitbook.io/yq/)
 - Written in portable go, so you can download a lovely dependency free binary
@@ -302,7 +314,7 @@ Supported by @rmescandon (https://launchpad.net/~rmescandon/+archive/ubuntu/yq)
 - [Deeply data structures](https://mikefarah.gitbook.io/yq/operators/traverse-read)
 - [Sort keys](https://mikefarah.gitbook.io/yq/operators/sort-keys)
 - Manipulate yaml [comments](https://mikefarah.gitbook.io/yq/operators/comment-operators), [styling](https://mikefarah.gitbook.io/yq/operators/style), [tags](https://mikefarah.gitbook.io/yq/operators/tag) and [anchors and aliases](https://mikefarah.gitbook.io/yq/operators/anchor-and-alias-operators).
-- [Update inplace](https://mikefarah.gitbook.io/yq/v/v4.x/commands/evaluate#flags)
+- [Update in place](https://mikefarah.gitbook.io/yq/v/v4.x/commands/evaluate#flags)
 - [Complex expressions to select and update](https://mikefarah.gitbook.io/yq/operators/select#select-and-update-matching-values-in-map)
 - Keeps yaml formatting and comments when updating (though there are issues with whitespace)
 - [Decode/Encode base64 data](https://mikefarah.gitbook.io/yq/operators/encode-decode)
@@ -329,7 +341,7 @@ Examples:
 # yq defaults to 'eval' command if no command is specified. See "yq eval --help" for more examples.
 yq '.stuff' < myfile.yml # outputs the data at the "stuff" node from "myfile.yml"
 
-yq -i '.stuff = "foo"' myfile.yml # update myfile.yml inplace
+yq -i '.stuff = "foo"' myfile.yml # update myfile.yml in place
 
 
 Available Commands:
@@ -346,7 +358,7 @@ Flags:
       --header-preprocess             Slurp any header comments and separators before processing expression. (default true)
   -h, --help                          help for yq
   -I, --indent int                    sets indent level for output (default 2)
-  -i, --inplace                       update the file inplace of first file given.
+  -i, --inplace                       update the file in place of first file given.
   -p, --input-format string           [yaml|y|xml|x] parse format for input. Note that json is a subset of yaml. (default "yaml")
   -M, --no-colors                     force print with no colors
   -N, --no-doc                        Don't print document separators (---)
@@ -365,5 +377,6 @@ Use "yq [command] --help" for more information about a command.
 ## Known Issues / Missing Features
 - `yq` attempts to preserve comment positions and whitespace as much as possible, but it does not handle all scenarios (see https://github.com/go-yaml/yaml/tree/v3 for details)
 - Powershell has its own...[opinions on quoting yq](https://mikefarah.gitbook.io/yq/usage/tips-and-tricks#quotes-in-windows-powershell)
+- "yes", "no" were dropped as boolean values in the yaml 1.2 standard - which is the standard yq assumes.
 
 See [tips and tricks](https://mikefarah.gitbook.io/yq/usage/tips-and-tricks) for more common problems and solutions.

@@ -5,12 +5,6 @@ Encode and decode to and from JSON. Supports multiple JSON documents in a single
 Note that YAML is a superset of (single document) JSON - so you don't have to use the JSON parser to read JSON when there is only one JSON document in the input. You will probably want to pretty print the result in this case, to get idiomatic YAML styling.
 
 
-{% hint style="warning" %}
-Note that versions prior to 4.18 require the 'eval/e' command to be specified.&#x20;
-
-`yq e <exp> <file>`
-{% endhint %}
-
 ## Parse json: simple
 JSON is a subset of yaml, so all you need to do is prettify the output
 
@@ -20,7 +14,7 @@ Given a sample.json file of:
 ```
 then
 ```bash
-yq -P '.' sample.json
+yq -p=json sample.json
 ```
 will output
 ```yaml
@@ -36,7 +30,7 @@ Given a sample.json file of:
 ```
 then
 ```bash
-yq -P '.' sample.json
+yq -p=json sample.json
 ```
 will output
 ```yaml
@@ -131,9 +125,7 @@ will output
 {"whatever":"cat"}
 ```
 
-## Roundtrip NDJSON
-Unfortunately the json encoder strips leading spaces of values.
-
+## Roundtrip JSON Lines / NDJSON
 Given a sample.json file of:
 ```json
 {"this": "is a multidoc json file"}
@@ -153,7 +145,7 @@ will output
 ```
 
 ## Roundtrip multi-document JSON
-The NDJSON parser can also handle multiple multi-line json documents in a single file!
+The parser can also handle multiple multi-line json documents in a single file (despite this not being in the JSON Lines / NDJSON spec). Typically you would have one entire JSON document per line, but the parser also supports multiple multi-line json documents
 
 Given a sample.json file of:
 ```json
@@ -235,7 +227,7 @@ will output
 {"a number":4}
 ```
 
-## Decode NDJSON
+## Decode JSON Lines / NDJSON
 Given a sample.json file of:
 ```json
 {"this": "is a multidoc json file"}
@@ -252,7 +244,7 @@ will output
 this: is a multidoc json file
 ---
 each:
-    - line is a valid json document
+  - line is a valid json document
 ---
 a number: 4
 ```

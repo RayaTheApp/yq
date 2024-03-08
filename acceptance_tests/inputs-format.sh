@@ -63,6 +63,75 @@ EOM
   assertEquals "$expected" "$X"
 }
 
+testInputCSVCustomSeparator() {
+  cat >test.csv <<EOL
+fruit;yumLevel
+apple;5
+banana;4
+EOL
+
+  read -r -d '' expected << EOM
+- fruit: apple
+  yumLevel: 5
+- fruit: banana
+  yumLevel: 4
+EOM
+
+  X=$(./yq -p=csv --csv-separator ";" test.csv)
+  assertEquals "$expected" "$X"
+
+  X=$(./yq ea -p=csv --csv-separator ";" test.csv)
+  assertEquals "$expected" "$X"
+}
+
+testInputCSVNoAuto() {
+  cat >test.csv <<EOL
+thing1
+name: cat
+EOL
+
+  read -r -d '' expected << EOM
+- thing1: 'name: cat'
+EOM
+
+  X=$(./yq --csv-auto-parse=f test.csv -oy)
+  assertEquals "$expected" "$X"
+
+  X=$(./yq ea --csv-auto-parse=f test.csv -oy)
+  assertEquals "$expected" "$X"
+}
+
+testInputTSVNoAuto() {
+  cat >test.tsv <<EOL
+thing1
+name: cat
+EOL
+
+  read -r -d '' expected << EOM
+- thing1: 'name: cat'
+EOM
+
+  X=$(./yq --tsv-auto-parse=f test.tsv -oy)
+  assertEquals "$expected" "$X"
+
+  X=$(./yq ea --tsv-auto-parse=f test.tsv -oy)
+  assertEquals "$expected" "$X"
+}
+
+testInputCSVUTF8() {
+  read -r -d '' expected << EOM
+- id: 1
+  first: john
+  last: smith
+- id: 1
+  first: jane
+  last: smith
+EOM
+
+  X=$(./yq -p=csv utf8.csv)
+  assertEquals "$expected" "$X"
+}
+
 testInputTSV() {
   cat >test.tsv <<EOL
 fruit	yumLevel
@@ -95,7 +164,7 @@ EOL
   read -r -d '' expected << EOM
 cat:
   +content: BiBi
-  +legs: "4"
+  +@legs: "4"
 EOM
 
   X=$(./yq e -p=xml test.yml)
@@ -106,23 +175,44 @@ EOM
 }
 
 testInputXmlNamespaces() {
-  cat >test.yml <<EOL
+  cat >test.xml <<EOL
 <?xml version="1.0"?>
 <map xmlns="some-namespace" xmlns:xsi="some-instance" xsi:schemaLocation="some-url">
 </map>
 EOL
 
   read -r -d '' expected << EOM
++p_xml: version="1.0"
 map:
-  +xmlns: some-namespace
-  +xmlns:xsi: some-instance
-  +xsi:schemaLocation: some-url
+  +@xmlns: some-namespace
+  +@xmlns:xsi: some-instance
+  +@xsi:schemaLocation: some-url
 EOM
 
-  X=$(./yq e -p=xml test.yml)
+  X=$(./yq e -p=xml test.xml)
   assertEquals "$expected" "$X"
 
-  X=$(./yq ea -p=xml test.yml)
+  X=$(./yq ea -p=xml test.xml)
+  assertEquals "$expected" "$X"
+}
+
+testInputXmlRoundtrip() {
+  cat >test.yml <<EOL
+<?xml version="1.0"?>
+<!DOCTYPE config SYSTEM "/etc/iwatch/iwatch.dtd" >
+<map xmlns="some-namespace" xmlns:xsi="some-instance" xsi:schemaLocation="some-url">Meow</map>
+EOL
+
+  read -r -d '' expected << EOM
+<?xml version="1.0"?>
+<!DOCTYPE config SYSTEM "/etc/iwatch/iwatch.dtd" >
+<map xmlns="some-namespace" xmlns:xsi="some-instance" xsi:schemaLocation="some-url">Meow</map>
+EOM
+
+  X=$(./yq -p=xml -o=xml test.yml)
+  assertEquals "$expected" "$X"
+
+  X=$(./yq ea -p=xml -o=xml test.yml)
   assertEquals "$expected" "$X"
 }
 
@@ -139,11 +229,11 @@ testInputXmlStrict() {
 </root>
 EOL
 
-  X=$(./yq -p=xml --xml-strict-mode test.yml 2>&1)
+  X=$(./yq -p=xml --xml-strict-mode test.yml -o=xml 2>&1)
   assertEquals 1 $?
   assertEquals "Error: bad file 'test.yml': XML syntax error on line 7: invalid character entity &writer;" "$X"
 
-  X=$(./yq ea -p=xml --xml-strict-mode test.yml 2>&1)
+  X=$(./yq ea -p=xml --xml-strict-mode test.yml -o=xml 2>&1)
   assertEquals "Error: bad file 'test.yml': XML syntax error on line 7: invalid character entity &writer;" "$X"
 }
 
@@ -155,7 +245,7 @@ EOL
   read -r -d '' expected << EOM
 cat:
   +content: BiBi
-  +legs: "4"
+  +@legs: "4"
 EOM
 
   X=$(cat /dev/null | ./yq e -p=xml test.yml)

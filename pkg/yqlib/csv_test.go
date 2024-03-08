@@ -13,6 +13,13 @@ Gary,1,true,168.8
 Samantha's Rabbit,2,false,-188.8
 `
 
+const csvSimpleWithObject = `name,numberOfCats,likesApples,height,facts
+Gary,1,true,168.8,cool: true
+Samantha's Rabbit,2,false,-188.8,tall: indeed
+`
+const csvMissing = `name,numberOfCats,likesApples,height
+,null,,168.8
+`
 const expectedUpdatedSimpleCsv = `name,numberOfCats,likesApples,height
 Gary,3,true,168.8
 Samantha's Rabbit,2,false,-188.8
@@ -36,6 +43,31 @@ const expectedYamlFromCSV = `- name: Gary
   numberOfCats: 2
   likesApples: false
   height: -188.8
+`
+const expectedYamlFromCSVWithObject = `- name: Gary
+  numberOfCats: 1
+  likesApples: true
+  height: 168.8
+  facts:
+    cool: true
+- name: Samantha's Rabbit
+  numberOfCats: 2
+  likesApples: false
+  height: -188.8
+  facts:
+    tall: indeed
+`
+
+const expectedYamlFromCSVNoParsing = `- name: Gary
+  numberOfCats: 1
+  likesApples: true
+  height: 168.8
+  facts: 'cool: true'
+- name: Samantha's Rabbit
+  numberOfCats: 2
+  likesApples: false
+  height: -188.8
+  facts: 'tall: indeed'
 `
 
 const expectedYamlFromCSVMissingData = `- name: Gary
@@ -111,11 +143,49 @@ var csvScenarios = []formatScenario{
 		scenarioType:   "encode-csv",
 	},
 	{
+		description:  "decode csv missing",
+		skipDoc:      true,
+		input:        csvMissing,
+		expected:     csvMissing,
+		scenarioType: "roundtrip-csv",
+	},
+	{
+		description:  "decode csv key",
+		skipDoc:      true,
+		input:        csvSimple,
+		expression:   ".[0].name | key",
+		expected:     "name\n",
+		scenarioType: "decode-csv",
+	},
+	{
+		description:  "decode csv parent",
+		skipDoc:      true,
+		input:        csvSimple,
+		expression:   ".[0].name | parent | .height",
+		expected:     "168.8\n",
+		scenarioType: "decode-csv",
+	},
+	{
 		description:    "Parse CSV into an array of objects",
-		subdescription: "First row is assumed to be the header row.",
-		input:          csvSimple,
-		expected:       expectedYamlFromCSV,
-		scenarioType:   "decode-csv-object",
+		subdescription: "First row is assumed to be the header row. By default, entries with YAML/JSON formatting will be parsed!",
+		input:          csvSimpleWithObject,
+		expected:       expectedYamlFromCSVWithObject,
+		scenarioType:   "decode-csv",
+	},
+	{
+		description:    "Parse CSV into an array of objects, no auto-parsing",
+		subdescription: "First row is assumed to be the header row. Entries with YAML/JSON will be left as strings.",
+		input:          csvSimpleWithObject,
+		expected:       expectedYamlFromCSVNoParsing,
+		scenarioType:   "decode-csv-no-auto",
+	},
+	{
+		description:  "Scalar roundtrip",
+		skipDoc:      true,
+		input:        "mike\ncat",
+		expression:   ".[0].mike",
+		expected:     "cat\n",
+		scenarioType: "roundtrip-csv",
 	},
 	{
 		description:    "Parse TSV into an array of objects",
@@ -136,21 +206,23 @@ var csvScenarios = []formatScenario{
 func testCSVScenario(t *testing.T, s formatScenario) {
 	switch s.scenarioType {
 	case "encode-csv":
-		test.AssertResultWithContext(t, s.expected, processFormatScenario(s, NewYamlDecoder(), NewCsvEncoder(',')), s.description)
+		test.AssertResultWithContext(t, s.expected, mustProcessFormatScenario(s, NewYamlDecoder(ConfiguredYamlPreferences), NewCsvEncoder(ConfiguredCsvPreferences)), s.description)
 	case "encode-tsv":
-		test.AssertResultWithContext(t, s.expected, processFormatScenario(s, NewYamlDecoder(), NewCsvEncoder('\t')), s.description)
-	case "decode-csv-object":
-		test.AssertResultWithContext(t, s.expected, processFormatScenario(s, NewCSVObjectDecoder(','), NewYamlEncoder(2, false, true, true)), s.description)
+		test.AssertResultWithContext(t, s.expected, mustProcessFormatScenario(s, NewYamlDecoder(ConfiguredYamlPreferences), NewCsvEncoder(ConfiguredTsvPreferences)), s.description)
+	case "decode-csv":
+		test.AssertResultWithContext(t, s.expected, mustProcessFormatScenario(s, NewCSVObjectDecoder(ConfiguredCsvPreferences), NewYamlEncoder(ConfiguredYamlPreferences)), s.description)
+	case "decode-csv-no-auto":
+		test.AssertResultWithContext(t, s.expected, mustProcessFormatScenario(s, NewCSVObjectDecoder(CsvPreferences{Separator: ',', AutoParse: false}), NewYamlEncoder(ConfiguredYamlPreferences)), s.description)
 	case "decode-tsv-object":
-		test.AssertResultWithContext(t, s.expected, processFormatScenario(s, NewCSVObjectDecoder('\t'), NewYamlEncoder(2, false, true, true)), s.description)
+		test.AssertResultWithContext(t, s.expected, mustProcessFormatScenario(s, NewCSVObjectDecoder(ConfiguredTsvPreferences), NewYamlEncoder(ConfiguredYamlPreferences)), s.description)
 	case "roundtrip-csv":
-		test.AssertResultWithContext(t, s.expected, processFormatScenario(s, NewCSVObjectDecoder(','), NewCsvEncoder(',')), s.description)
+		test.AssertResultWithContext(t, s.expected, mustProcessFormatScenario(s, NewCSVObjectDecoder(ConfiguredCsvPreferences), NewCsvEncoder(ConfiguredCsvPreferences)), s.description)
 	default:
 		panic(fmt.Sprintf("unhandled scenario type %q", s.scenarioType))
 	}
 }
 
-func documentCSVDecodeObjectScenario(t *testing.T, w *bufio.Writer, s formatScenario, formatType string) {
+func documentCSVDecodeObjectScenario(w *bufio.Writer, s formatScenario, formatType string) {
 	writeOrPanic(w, fmt.Sprintf("## %v\n", s.description))
 
 	if s.subdescription != "" {
@@ -171,7 +243,32 @@ func documentCSVDecodeObjectScenario(t *testing.T, w *bufio.Writer, s formatScen
 	}
 
 	writeOrPanic(w, fmt.Sprintf("```yaml\n%v```\n\n",
-		processFormatScenario(s, NewCSVObjectDecoder(separator), NewYamlEncoder(s.indent, false, true, true))),
+		mustProcessFormatScenario(s, NewCSVObjectDecoder(CsvPreferences{Separator: separator, AutoParse: true}), NewYamlEncoder(ConfiguredYamlPreferences))),
+	)
+}
+
+func documentCSVDecodeObjectNoAutoScenario(w *bufio.Writer, s formatScenario, formatType string) {
+	writeOrPanic(w, fmt.Sprintf("## %v\n", s.description))
+
+	if s.subdescription != "" {
+		writeOrPanic(w, s.subdescription)
+		writeOrPanic(w, "\n\n")
+	}
+
+	writeOrPanic(w, fmt.Sprintf("Given a sample.%v file of:\n", formatType))
+	writeOrPanic(w, fmt.Sprintf("```%v\n%v\n```\n", formatType, s.input))
+
+	writeOrPanic(w, "then\n")
+	writeOrPanic(w, fmt.Sprintf("```bash\nyq -p=%v --csv-auto-parse=f sample.%v\n```\n", formatType, formatType))
+	writeOrPanic(w, "will output\n")
+
+	separator := ','
+	if formatType == "tsv" {
+		separator = '\t'
+	}
+
+	writeOrPanic(w, fmt.Sprintf("```yaml\n%v```\n\n",
+		mustProcessFormatScenario(s, NewCSVObjectDecoder(CsvPreferences{Separator: separator, AutoParse: false}), NewYamlEncoder(ConfiguredYamlPreferences))),
 	)
 }
 
@@ -201,9 +298,10 @@ func documentCSVEncodeScenario(w *bufio.Writer, s formatScenario, formatType str
 	if formatType == "tsv" {
 		separator = '\t'
 	}
-
+	csvPrefs := NewDefaultCsvPreferences()
+	csvPrefs.Separator = separator
 	writeOrPanic(w, fmt.Sprintf("```%v\n%v```\n\n", formatType,
-		processFormatScenario(s, NewYamlDecoder(), NewCsvEncoder(separator))),
+		mustProcessFormatScenario(s, NewYamlDecoder(ConfiguredYamlPreferences), NewCsvEncoder(csvPrefs))),
 	)
 }
 
@@ -234,12 +332,15 @@ func documentCSVRoundTripScenario(w *bufio.Writer, s formatScenario, formatType 
 		separator = '\t'
 	}
 
+	csvPrefs := NewDefaultCsvPreferences()
+	csvPrefs.Separator = separator
+
 	writeOrPanic(w, fmt.Sprintf("```%v\n%v```\n\n", formatType,
-		processFormatScenario(s, NewCSVObjectDecoder(separator), NewCsvEncoder(separator))),
+		mustProcessFormatScenario(s, NewCSVObjectDecoder(CsvPreferences{Separator: separator, AutoParse: true}), NewCsvEncoder(csvPrefs))),
 	)
 }
 
-func documentCSVScenario(t *testing.T, w *bufio.Writer, i interface{}) {
+func documentCSVScenario(_ *testing.T, w *bufio.Writer, i interface{}) {
 	s := i.(formatScenario)
 	if s.skipDoc {
 		return
@@ -249,10 +350,12 @@ func documentCSVScenario(t *testing.T, w *bufio.Writer, i interface{}) {
 		documentCSVEncodeScenario(w, s, "csv")
 	case "encode-tsv":
 		documentCSVEncodeScenario(w, s, "tsv")
-	case "decode-csv-object":
-		documentCSVDecodeObjectScenario(t, w, s, "csv")
+	case "decode-csv":
+		documentCSVDecodeObjectScenario(w, s, "csv")
+	case "decode-csv-no-auto":
+		documentCSVDecodeObjectNoAutoScenario(w, s, "csv")
 	case "decode-tsv-object":
-		documentCSVDecodeObjectScenario(t, w, s, "tsv")
+		documentCSVDecodeObjectScenario(w, s, "tsv")
 	case "roundtrip-csv":
 		documentCSVRoundTripScenario(w, s, "csv")
 
