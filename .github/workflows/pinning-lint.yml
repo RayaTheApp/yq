@@ -1,0 +1,31 @@
+name: Pinning lint
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - ".github/actions/**"
+      - "zizmor.yml"
+  push:
+    branches: [master]
+    paths:
+      - ".github/workflows/**"
+      - ".github/actions/**"
+      - "zizmor.yml"
+
+permissions: {}
+
+jobs:
+  pinning-lint:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - name: Run pinning-lint
+        uses: RayaTheApp/actions/.github/actions/pinning-lint@master
+        with:
+          mode: blocking
