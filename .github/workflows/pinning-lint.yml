@@ -1,0 +1,144 @@
+name: Pinning lint
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+      - ".github/actions/**"
+      - "zizmor.yml"
+  push:
+    branches: [master]
+    paths:
+      - ".github/workflows/**"
+      - ".github/actions/**"
+      - "zizmor.yml"
+
+permissions: {}
+
+jobs:
+  pinning-lint:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+
+      # Inline zizmor audit: public forks cannot consume composite actions from
+      # the private RayaTheApp/actions repo. Logic mirrors pinning-lint@master.
+      - name: Install zizmor
+        shell: bash
+        env:
+          # Bump these together when upgrading zizmor. Checksums come from
+          # `sha256sum` of the github.com/zizmorcore/zizmor release tarballs.
+          ZIZMOR_VERSION: "1.24.1"
+          ZIZMOR_SHA256_X86_64: "a8000f3c683319a523d3b20df0e75457ba591f049cfcbfa98966631b56733c03"
+          ZIZMOR_SHA256_AARCH64: "d66e37ef8a375fb07939c630ebf9709a6e0f20242bdc3faf672a7ed97e0b768d"
+        run: |
+          set -euo pipefail
+
+          ARCH="$(uname -m)"
+          case "$ARCH" in
+            x86_64)  TARGET="x86_64-unknown-linux-gnu";  EXPECTED_SHA="$ZIZMOR_SHA256_X86_64" ;;
+            aarch64) TARGET="aarch64-unknown-linux-gnu"; EXPECTED_SHA="$ZIZMOR_SHA256_AARCH64" ;;
+            *) echo "::error::pinning-lint: unsupported runner arch '$ARCH' (expected x86_64 or aarch64)"; exit 1 ;;
+          esac
+
+          URL="https://github.com/zizmorcore/zizmor/releases/download/v${ZIZMOR_VERSION}/zizmor-${TARGET}.tar.gz"
+          TMP="$(mktemp -d)"
+          trap 'rm -rf "$TMP"' EXIT
+          cd "$TMP"
+
+          curl -fsSL "$URL" -o zizmor.tar.gz
+          echo "${EXPECTED_SHA}  zizmor.tar.gz" | sha256sum -c -
+          tar xzf zizmor.tar.gz
+
+          mkdir -p "${HOME}/.local/bin"
+          install -m 755 zizmor "${HOME}/.local/bin/zizmor"
+          echo "${HOME}/.local/bin" >> "$GITHUB_PATH"
+
+          "${HOME}/.local/bin/zizmor" --version
+
+      - name: Run pinning audit
+        id: audit
+        shell: bash
+        env:
+          MODE: blocking
+          CONFIG_PATH: zizmor.yml
+        run: |
+          set -uo pipefail
+
+          case "$MODE" in
+            advisory|blocking) ;;
+            *) echo "::error::pinning-lint: invalid mode '$MODE' (expected 'advisory' or 'blocking')"; exit 1 ;;
+          esac
+
+          OUTPUT="$(mktemp)"
+          trap 'rm -f "$OUTPUT"' EXIT
+
+          zizmor \
+            --persona=regular \
+            --no-online-audits \
+            --format=json \
+            --config="$CONFIG_PATH" \
+            . > "$OUTPUT" || true
+
+          if ! jq -e 'type == "array"' "$OUTPUT" > /dev/null 2>&1; then
+            echo "::error::pinning-lint: zizmor did not produce valid JSON output. Run logs above."
+            cat "$OUTPUT" >&2 || true
+            exit 1
+          fi
+
+          FINDINGS_COUNT="$(jq '[.[] | select(.ident == "unpinned-uses")] | length' "$OUTPUT")"
+
+          if [[ "$FINDINGS_COUNT" -eq 0 ]]; then
+            echo "pinning-lint: no unpinned action references found."
+            exit 0
+          fi
+
+          jq -r '
+            [.[] | select(.ident == "unpinned-uses")][]
+            | .locations[]
+            | "::warning file=\((.symbolic.key.Local.given_path // "<unknown>") | sub("^\\./"; "")),line=\(.concrete.location.start_point.row + 1),col=\(.concrete.location.start_point.column + 1),endLine=\(.concrete.location.end_point.row + 1),endColumn=\(.concrete.location.end_point.column + 1),title=Unpinned action ref::Action reference \(.concrete.feature) is not pinned to a commit SHA. See https://docs.zizmor.sh/audits/#unpinned-uses"
+          ' "$OUTPUT"
+
+          {
+            if [[ "$MODE" == "blocking" ]]; then
+              echo "### pinning-lint: $FINDINGS_COUNT unpinned action reference(s) (blocking)"
+              echo ""
+              echo "This check is failing because one or more \`uses:\` references are not pinned to a full-length commit SHA."
+            else
+              echo "### pinning-lint: $FINDINGS_COUNT unpinned action reference(s) (advisory)"
+              echo ""
+              echo "Advisory mode — not failing the job, but these \`uses:\` references should be pinned to a full-length commit SHA."
+            fi
+            echo ""
+            echo "| File | Line | Action reference |"
+            echo "| --- | --- | --- |"
+            jq -r '
+              [.[] | select(.ident == "unpinned-uses")][]
+              | .locations[]
+              | "| \((.symbolic.key.Local.given_path // "<unknown>") | sub("^\\./"; "")) | \(.concrete.location.start_point.row + 1) | `\(.concrete.feature)` |"
+            ' "$OUTPUT"
+            echo ""
+            echo "**How to fix:** replace each tag/branch ref with the full commit SHA, keeping the tag as a comment."
+            echo ""
+            echo '```yaml'
+            echo "# before"
+            echo "uses: actions/checkout@v4"
+            echo "# after"
+            echo "uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1"
+            echo '```'
+            echo ""
+            echo "See [zizmor unpinned-uses docs](https://docs.zizmor.sh/audits/#unpinned-uses) and [PLATFORM-764](https://rayatheapp.atlassian.net/browse/PLATFORM-764)."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [[ "$MODE" == "blocking" ]]; then
+            echo "::error::pinning-lint: $FINDINGS_COUNT unpinned action reference(s) found (mode=blocking). See annotations and the job summary."
+            exit 1
+          fi
+
+          echo "::warning::pinning-lint: $FINDINGS_COUNT unpinned action reference(s) found (mode=advisory). See annotations and the job summary."
+          exit 0

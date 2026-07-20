@@ -1,0 +1,7 @@
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        "RayaTheApp/*": any
+        "rayatheapp/*": any
+        "*": hash-pin
